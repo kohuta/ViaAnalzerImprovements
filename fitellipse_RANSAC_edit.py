@@ -31,7 +31,9 @@ import configparser #used to create INI files that can be edited by user, not ne
 #---------------------------------------------
 
 
-def FitVia_RANSAC(pnts,input_pts=50, max_itts=500, max_refines=30, max_perc_inliers=90.0):
+
+
+def FitVia_RANSAC2(pnts,input_pts=5, max_itts=5, max_refines=3, max_perc_inliers=80.0):
     '''
     Robust ellipse fitting to segmented boundary points
     Parameters
@@ -61,11 +63,19 @@ def FitVia_RANSAC(pnts,input_pts=50, max_itts=500, max_refines=30, max_perc_inli
     # Suppress invalid values
     np.seterr(invalid='ignore')
 
-    # Maximum normalized error squared for inliers
-    max_norm_err_sq = 2.0
+    # Maximum normalize
+    # d error squared for inliers
+    max_norm_err_sq = 5
+    norm_err_score=np.inf
 
     # Tiny circle init
     best_ellipse = ((0,0),(1e-6,1e-6),0)
+    bestInliers =np.zeros((5,2))
+    inlier_count=0
+    inliers =[]
+    bestInliers=pnts
+    #print(bestInliers)
+    #print(pnts)
 
     # Create display window and init overlay image
     #if graphics:
@@ -73,40 +83,36 @@ def FitVia_RANSAC(pnts,input_pts=50, max_itts=500, max_refines=30, max_perc_inli
 
     # Count pnts (n x 2)
     n_pnts = pnts.shape[0]
+    print('npnts: ',n_pnts)
 
     # Break if too few points to fit ellipse (RARE)
     if n_pnts < input_pts:
         return best_ellipse
     
-    random.seed()
+   # random.seed()
     # Ransac iterations
     for itt in range(0,max_itts):
 
         # Select 5 points at random
         sample_pnts = np.asarray(random.sample(list(pnts), input_pts))
+        #print(sample_pnts)
 
         # Fit ellipse to points
         ellipse = cv2.fitEllipse(sample_pnts)
 
-        # Refine inliers iteratively
-        for refine in range(0,max_refines):
-
+        
             # Calculate normalized errors for all points
-            norm_err = EllipseNormError(pnts, ellipse)
-
+        norm_err = EllipseNormError(pnts, ellipse)
+            #print(norm_err)
             # Identify inliers
-            inliers = np.nonzero(norm_err**2 < max_norm_err_sq)[0]
+        inliers = np.nonzero(np.abs(norm_err) <= max_norm_err_sq)[0]
 
             # Update inliers set
-            inlier_pnts = pnts[inliers]
+        inlier_pnts = pnts[inliers]
+            #print('inpnts: ',inlier_pnts.shape[0])
 
             # Protect ellipse fitting from too few points
-            if inliers.size < 5:
-                if DEBUG: print('Break < 5 Inliers (During Refine)')
-                break
 
-            # Fit ellipse to refined inlier set
-            ellipse = cv2.fitEllipse(inlier_pnts)
 
         # End refinement
 
@@ -122,15 +128,126 @@ def FitVia_RANSAC(pnts,input_pts=50, max_itts=500, max_refines=30, max_perc_inli
         #    cv2.waitKey(5)
 
         # Update best ellipse
-        best_ellipse = ellipse
+        if n_inliers>inlier_count:
+            best_ellipse = ellipse
+            bestInliers=inlier_pnts
+            inlier_count=n_inliers
+
+            print(perc_inliers)
 
         if perc_inliers > max_perc_inliers:
             if DEBUG: print('Break Max Perc Inliers')
             break
 
-    return [best_ellipse,inlier_pnts]
+    return [best_ellipse,bestInliers]
+
+def FitVia_RANSAC_Converge(pnts,input_pts=5, max_itts=5, max_refines=3, max_perc_inliers=80.0):
+    '''
+    Robust ellipse fitting to segmented boundary points
+    Parameters
+    ----
+    pnts : n x 2 array of integers
+        Candidate pupil-iris boundary points from edge detection
+    roi : 2D scalar array
+        Grayscale image of pupil-iris region for display only
+    max_itts : integer
+        Maximum RANSAC ellipse candidate iterations
+    max_refines : integer
+        Maximum RANSAC ellipse inlier refinements
+    max_perc_inliers : float
+        Maximum inlier percentage of total points for convergence
+    Returns
+    ----
+    best_ellipse : tuple of tuples
+        Best fitted ellipse parameters ((x0, y0), (a,b), theta)
+    '''
+
+    # Debug flag
+    DEBUG = False
+
+    # Output flags
+    #graphics = cfg.getboolean('OUTPUT', 'graphics')
+
+    # Suppress invalid values
+    np.seterr(invalid='ignore')
+
+    # Maximum normalize
+    # d error squared for inliers
+    max_norm_err_sq = 3
+    norm_err_score=np.inf
+
+    # Tiny circle init
+    best_ellipse = ((0,0),(1e-6,1e-6),0)
+    bestInliers =np.zeros((5,2))
+    inlier_count=0
+    inliers =[]
+    bestInliers=pnts
+    #print(bestInliers)
+    #print(pnts)
+
+    # Create display window and init overlay image
+    #if graphics:
+    #    cv2.namedWindow('RANSAC', cv2.WINDOW_AUTOSIZE)
+
+    # Count pnts (n x 2)
+    n_pnts = pnts.shape[0]
+    print('npnts: ',n_pnts)
+
+    # Break if too few points to fit ellipse (RARE)
+    if n_pnts < input_pts:
+        return best_ellipse
+    
+   # random.seed()
+    # Ransac iterations
+    for itt in range(0,max_itts):
+
+        # Select 5 points at random
+        sample_pnts = np.asarray(random.sample(list(bestInliers), input_pts))
+        #print(sample_pnts)
+
+        # Fit ellipse to points
+        ellipse = cv2.fitEllipse(sample_pnts)
+
+        
+            # Calculate normalized errors for all points
+        norm_err = EllipseNormError(pnts, ellipse)
+            #print(norm_err)
+            # Identify inliers
+        inliers = np.nonzero(np.abs(norm_err) <= max_norm_err_sq)[0]
+
+            # Update inliers set
+        inlier_pnts = pnts[inliers]
+            #print('inpnts: ',inlier_pnts.shape[0])
+
+            # Protect ellipse fitting from too few points
 
 
+        # End refinement
+
+        # Count inliers (n x 2)
+        n_inliers    = inliers.size
+        perc_inliers = (n_inliers * 100.0) / n_pnts
+
+        # Update overlay image and display
+        #if graphics:
+        #    overlay = cv2.cvtColor(roi/2,cv2.COLOR_GRAY2RGB)
+        #    OverlayRANSACFit(overlay, pnts, inlier_pnts, ellipse)
+        #    cv2.imshow('RANSAC', overlay)
+        #    cv2.waitKey(5)
+
+        # Update best ellipse
+        if n_inliers>inlier_count:
+            best_ellipse = ellipse
+            bestInliers=inlier_pnts
+            inlier_count=n_inliers
+
+            print(perc_inliers)
+
+        if perc_inliers > max_perc_inliers:
+            if DEBUG: print('Break Max Perc Inliers')
+            break
+
+    return [best_ellipse,bestInliers]
 
 def FitEllipse_RANSAC_Support(pnts, roi, cfg, max_itts=5, max_refines=3, max_perc_inliers=95.0):
     '''
@@ -302,7 +419,6 @@ def FitEllipse_RANSAC(pnts, roi, cfg, max_itts=5, max_refines=3, max_perc_inlier
 
     # Count pnts (n x 2)
     n_pnts = pnts.shape[0]
-
     # Break if too few points to fit ellipse (RARE)
     if n_pnts < 5:
         return best_ellipse
@@ -519,6 +635,37 @@ def EllipseNormError(pnts, ellipse):
     err_pnts = EllipseError(pnts, ellipse)
 
     return err_pnts / err_p1
+
+def EllipseNormalizedError(pnts, ellipse):
+    """
+    Error normalization factor, alpha
+    Normalizes cost to 1.0 at point 1 pixel out from minor vertex along minor axis
+    """
+
+    # Ellipse tuple has form ( ( x0, y0), (bb, aa), phi_b_deg) )
+    # Where aa and bb are the major and minor axes, and phi_b_deg
+    # is the CW x to minor axis rotation in degrees
+    (x0,y0), (bb,aa), phi_b_deg = ellipse
+    
+    # Semiminor axis
+    b = min([bb,aa])/2
+    
+    # Convert phi_b from deg to rad
+    phi_b_rad = phi_b_deg * np.pi / 180.0
+
+    # Minor axis vector
+    bx, by = np.cos(phi_b_rad), np.sin(phi_b_rad)
+
+    # Point one pixel out from ellipse on minor axis
+    p1 = np.array( (x0 + (b + 1) * bx, y0 + (b + 1) * by) ).reshape(1,2)
+
+    # Error at this point
+    err_p1 = EllipseError(p1, ellipse)
+
+    # Errors at provided points
+    err_pnts = EllipseError(pnts, ellipse)
+
+    return err_pnts / np.amax(err_pnts)
 
 
 def EllipseSupport(pnts, ellipse, dIdx, dIdy):

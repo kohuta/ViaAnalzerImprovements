@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import scipy
 import circle_fit
 import csv
+from os import path
+import errno
 
 
 from skimage.draw import ellipse
@@ -63,10 +65,10 @@ def processImage(img,threshold,noiseReduction):
     iMapEdge=iMapEdge*gain
     iMapEdge[np.where(iMapEdge>255)]=255
 
-    cv2.namedWindow('Contours',cv2.WINDOW_NORMAL)
-    cv2.resizeWindow('Contours', 800,600)
-    cv2.imshow('Contours', iMapEdge) 
-    cv2.waitKey(0) 
+    #cv2.namedWindow('Contours',cv2.WINDOW_NORMAL)
+    #cv2.resizeWindow('Contours', 800,600)
+    #cv2.imshow('Contours', iMapEdge) 
+    #cv2.waitKey(0) 
 
     thresh,binaryImage  = cv2.threshold(iMapEdge,threshold,255,cv2.THRESH_BINARY_INV )
     #binaryImage = cv2.adaptiveThreshold(iMapEdge.astype(np.uint8),255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,block_size,thresh3)
@@ -76,9 +78,7 @@ def processImage(img,threshold,noiseReduction):
     binaryImage=cv2.morphologyEx(binaryImage, cv2.MORPH_CLOSE, kernel)
     #print(binaryImage.dtype)
 
-    cv2.imshow('Contours', binaryImage) 
-    cv2.waitKey(0) 
-    cv2.destroyAllWindows() 
+    
 
     return binaryImage
 
@@ -100,6 +100,14 @@ def findVias(binaryImage):
         x,y,w,h = cv2.boundingRect(cnt)
         aspect_ratio = float(w)/h
         if(aspect_ratio<.75):
+            continue
+        if(x<2):
+            continue
+        if(y<2):
+            continue
+        if(x+w>binaryImage.shape[1]-2):
+            continue
+        if(y+h>binaryImage.shape[0]-2):
             continue
         #extent
         area = cv2.contourArea(cnt)
@@ -129,10 +137,10 @@ def circleFit(outputImage,vias):
         (x,y),(MA,ma),angle = cv2.fitEllipse(cnt)
 
 
-        best_ellipse,inlier_pnts=fitellipse_RANSAC_edit.FitVia_RANSAC(cnt.reshape((cnt.shape[0],2)),input_pts=5,max_itts=100000, max_refines=30,max_perc_inliers=90.0)
+        best_ellipse,inlier_pnts=fitellipse_RANSAC_edit.FitVia_RANSAC2(cnt.reshape((cnt.shape[0],2)),input_pts=5,max_itts=10000, max_refines=1,max_perc_inliers=99.0)
         print(best_ellipse)
         cv2.ellipse(outputImage, (int(best_ellipse[0][0]),int(best_ellipse[0][1])), (int(best_ellipse[1][0]/2),int(best_ellipse[1][1]/2)),best_ellipse[2],0,359, (0, 0, 255), 2)
-
+        ((x,y),(MA,ma),angle)=best_ellipse
         mD, outx,outy, outang=getMinDiameter(cnt)
         mr=mD/2
         startpt=rotateLine((xc,yc), (xc-mr,yc), np.deg2rad(outang))#(xc-mr,yc)#(int(xc-mr/np.cos(outang)),int(yc-mr/np.cos(outang)))
@@ -154,11 +162,6 @@ def circleFit(outputImage,vias):
     cv2.putText(outputImage, 'Minor', (10,100), font, 2, (0, 0, 255), 2, cv2.LINE_AA)
     cv2.putText(outputImage, 'Min', (10,150), font, 2, (255, 0,0), 2, cv2.LINE_AA)
 
-    cv2.namedWindow('Contours',cv2.WINDOW_NORMAL)
-    cv2.resizeWindow('Contours', 800,600)
-    cv2.imshow('Contours', outputImage) 
-    cv2.waitKey(0) 
-    cv2.destroyAllWindows() 
 
     return outputImage, circles
 
@@ -243,13 +246,20 @@ def rotateLine(origin, point, angle):
 # You will need to modify the alpha value in order to achieve good results.
 if __name__ == "__main__":
 
-    directory = r'C:\Users\kohuta\Documents\Edge Detection Improvements\images\test 55um'#\DNP\H1-BACK\BACK_55'
-    maxDiameter=300
+    directory = r'C:\Users\kohuta\Documents\Edge Detection Improvements\images\DNP\H1-BACK\BACK_55'
+    OUT_FOLDER = '\output'
+    out_dir=directory+OUT_FOLDER
+    print(out_dir)
+    maxDiameter=500
     minDiameter=100
     replicate=False
     resultText=[]
     resultText.append("Radius, Major Axis, Minor Axis, Angle, Min Diameter")
-
+    try:
+        os.makedirs(out_dir)
+    except OSError as exception:
+        if exception.errno != errno.EEXIST:
+            raise
 
     for filename in os.listdir(directory):
         if filename.endswith(".bmp") or filename.endswith(".jpg"):
@@ -261,13 +271,15 @@ if __name__ == "__main__":
             cropY=img.shape[1]//25
             img=img[cropX:-cropX,cropY:-cropY]
 
-            binaryImage=processImage(img,120,9)
+            binaryImage=processImage(img,70,9)
             vias=findVias(binaryImage)
             outputImg,circles=circleFit(img,vias)
-            cv2.imwrite("output.jpg",outputImg)
+            cv2.imwrite(path.join(out_dir,filename),outputImg)
+            print(path.join(out_dir,filename))#os.path.splitext(os.path.basename(filename))[0]+"_output.jpg"))
 
 
-    with open('results.csv', 'w') as f:
+
+    with open(out_dir+r'\results.csv', 'w') as f:
         for item in resultText:
             f.write("%s\n" % item)
 
