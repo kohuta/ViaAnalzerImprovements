@@ -45,7 +45,7 @@ def processImage(img,threshold,noiseReduction,method="d+s",debug=False):
     #
     #Canny 
     #
-    CannyEdge=cv2.Canny(gray,50,200)
+    CannyEdge=cv2.Canny(gray,60,200)
 
     #
     #Difference Of Gaussian
@@ -111,7 +111,7 @@ def findVias(binaryImage):
         #aspect Ratio
         x,y,w,h = cv2.boundingRect(cnt)
         aspect_ratio = float(w)/h
-        if(aspect_ratio<.75):
+        if(aspect_ratio<.65):
             continue
         if(x<2):
             continue
@@ -126,7 +126,7 @@ def findVias(binaryImage):
         x,y,w,h = cv2.boundingRect(cnt)
         rect_area = w*h
         extent = float(area)/rect_area
-        if(extent<.7):
+        if(extent<.5):
             continue
         #Solidity
         area = cv2.contourArea(cnt)
@@ -296,18 +296,28 @@ if __name__ == "__main__":
         if filename.endswith(".bmp") or filename.endswith(".jpg"):
             # Read image. 
             img = cv2.imread(os.path.join(directory, filename), cv2.IMREAD_COLOR) 
-
+            debug = False
             # Convert to grayscale.
             cropX=img.shape[0]//25
             cropY=img.shape[1]//25
             img=img[cropX:-cropX,cropY:-cropY]
             #available methods: "d+s"   "canny" "sobel" "dog"
-            binaryImage=processImage(img,70,7,method="d+s",debug=False)
+            binaryImage=processImage(img,70,7,method="d+s",debug=debug)
             vias=findVias(binaryImage)
             outputImg,circles=circleFit(img,vias)
             cv2.imwrite(path.join(out_dir,filename),outputImg)
             print(path.join(out_dir,filename))#os.path.splitext(os.path.basename(filename))[0]+"_output.jpg"))
-
+            if(debug):
+                cv2.namedWindow('Contours',cv2.WINDOW_NORMAL)
+                cv2.resizeWindow('Contours', 800,600)
+                cv2.imshow('Contours', outputImg) 
+                cv2.waitKey(0) 
+                cv2.destroyAllWindows()
+                cv2.namedWindow('Contours',cv2.WINDOW_NORMAL)
+                cv2.resizeWindow('Contours', 800,600)
+                cv2.imshow('Contours', binaryImage) 
+                cv2.waitKey(0) 
+                cv2.destroyAllWindows()
 
 
     with open(out_dir+r'\results.csv', 'w') as f:

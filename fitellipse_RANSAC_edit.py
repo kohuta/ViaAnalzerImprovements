@@ -99,7 +99,9 @@ def FitVia_RANSAC2(pnts,input_pts=5, max_itts=5, max_refines=3, max_perc_inliers
 
         # Fit ellipse to points
         ellipse = cv2.fitEllipse(sample_pnts)
-
+        ((x,y),(MA,ma),angle)=ellipse
+        if(MA==0):
+            continue
         
             # Calculate normalized errors for all points
         norm_err = EllipseNormError(pnts, ellipse)
@@ -604,6 +606,36 @@ def EllipseError(pnts, ellipse):
 
     return err
 
+def EllipseEDError(pnts, ellipse):
+    """
+    Error normalization factor, alpha
+    Normalizes cost to 1.0 at point 1 pixel out from minor vertex along minor axis
+    """
+
+    # Ellipse tuple has form ( ( x0, y0), (bb, aa), phi_b_deg) )
+    # Where aa and bb are the major and minor axes, and phi_b_deg
+    # is the CW x to minor axis rotation in degrees
+    (x0,y0), (bb,aa), phi_b_deg = ellipse
+    
+    # Semiminor axis
+    b = min([bb,aa])/2
+    
+    # Convert phi_b from deg to rad
+    phi_b_rad = phi_b_deg * np.pi / 180.0
+
+    # Minor axis vector
+    bx, by = np.cos(phi_b_rad), np.sin(phi_b_rad)
+
+    # Point one pixel out from ellipse on minor axis
+    p1 = np.array( (x0 + (b + 1) * bx, y0 + (b + 1) * by) ).reshape(1,2)
+
+    # Error at this point
+    err_p1 = EllipseError(p1, ellipse)
+
+    # Errors at provided points
+    err_pnts = EllipseError(pnts, ellipse)
+
+    return err_pnts / err_p1
 
 def EllipseNormError(pnts, ellipse):
     """
