@@ -65,10 +65,7 @@ def processImage(img,threshold,noiseReduction):
     iMapEdge=iMapEdge*gain
     iMapEdge[np.where(iMapEdge>255)]=255
 
-    #cv2.namedWindow('Contours',cv2.WINDOW_NORMAL)
-    #cv2.resizeWindow('Contours', 800,600)
-    #cv2.imshow('Contours', iMapEdge) 
-    #cv2.waitKey(0) 
+
 
     thresh,binaryImage  = cv2.threshold(iMapEdge,threshold,255,cv2.THRESH_BINARY_INV )
     #binaryImage = cv2.adaptiveThreshold(iMapEdge.astype(np.uint8),255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,block_size,thresh3)
@@ -78,7 +75,11 @@ def processImage(img,threshold,noiseReduction):
     binaryImage=cv2.morphologyEx(binaryImage, cv2.MORPH_CLOSE, kernel)
     #print(binaryImage.dtype)
 
-    
+    #cv2.namedWindow('Contours',cv2.WINDOW_NORMAL)
+    #cv2.resizeWindow('Contours', 800,600)
+    #cv2.imshow('Contours', binaryImage) 
+    #cv2.waitKey(0) 
+    #cv2.destroyAllWindows()
 
     return binaryImage
 
@@ -114,7 +115,7 @@ def findVias(binaryImage):
         x,y,w,h = cv2.boundingRect(cnt)
         rect_area = w*h
         extent = float(area)/rect_area
-        if(extent<.5):
+        if(extent<.7):
             continue
         #Solidity
         area = cv2.contourArea(cnt)
@@ -246,7 +247,7 @@ def rotateLine(origin, point, angle):
 # You will need to modify the alpha value in order to achieve good results.
 if __name__ == "__main__":
 
-    directory = r'C:\Users\kohuta\Documents\Edge Detection Improvements\images\DNP\H1-BACK\BACK_55'
+    directory = r'C:\Users\kohuta\Documents\Edge Detection Improvements\images\OM\Top'#DNP\H1-BACK\BACK_55'
     OUT_FOLDER = '\output'
     out_dir=directory+OUT_FOLDER
     print(out_dir)
@@ -271,7 +272,7 @@ if __name__ == "__main__":
             cropY=img.shape[1]//25
             img=img[cropX:-cropX,cropY:-cropY]
 
-            binaryImage=processImage(img,70,9)
+            binaryImage=processImage(img,40,3)
             vias=findVias(binaryImage)
             outputImg,circles=circleFit(img,vias)
             cv2.imwrite(path.join(out_dir,filename),outputImg)

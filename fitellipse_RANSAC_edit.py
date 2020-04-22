@@ -135,9 +135,9 @@ def FitVia_RANSAC2(pnts,input_pts=5, max_itts=5, max_refines=3, max_perc_inliers
 
             print(perc_inliers)
 
-        if perc_inliers > max_perc_inliers:
-            if DEBUG: print('Break Max Perc Inliers')
-            break
+        #if perc_inliers > max_perc_inliers:
+        #    if DEBUG: print('Break Max Perc Inliers')
+        #    break
 
     return [best_ellipse,bestInliers]
 
