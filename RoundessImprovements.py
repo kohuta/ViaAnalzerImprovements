@@ -157,7 +157,9 @@ def circleFit(outputImage,vias):
         cv2.line(outputImage,(int(mastartpt[0]),int(mastartpt[1])),(int(maendpt[0]),int(maendpt[1])), (0, 0, 255), 1)
         
 
-        resultText.append(str(r)+", "+str(MA)+", "+str(ma)+", "+str(angle)+ ", "+str(mD))
+        edgeDeviation=calcED(best_ellipse,cnt)
+
+        resultText.append(str(r)+", "+str(MA)+", "+str(ma)+", "+str(angle)+ ", "+str(mD)+ ", "+str(edgeDeviation))
     font = cv2.FONT_HERSHEY_SIMPLEX
     cv2.putText(outputImage, 'Major', (10,50), font, 2, (0, 255, 255), 2, cv2.LINE_AA)
     cv2.putText(outputImage, 'Minor', (10,100), font, 2, (0, 0, 255), 2, cv2.LINE_AA)
@@ -165,6 +167,23 @@ def circleFit(outputImage,vias):
 
 
     return outputImage, circles
+
+def calcED(best_ellipse,cnt):
+    ((x,y),(MA,ma),angle)=best_ellipse
+    ed=[]
+    centered_cnt=cnt.reshape((cnt.shape[0],2))
+    centered_cnt[:,0]=centered_cnt[:,0]-x
+    centered_cnt[:,1]=centered_cnt[:,1]-y
+    RAH_cnt=cart2pol(centered_cnt[:,0],centered_cnt[:,1])
+    #print("RAH ",RAH_cnt)
+    for i in range(centered_cnt.shape[0]):
+        x=MA/2*math.cos(centered_cnt[i,1])*math.cos(angle)-ma/2*math.sin(centered_cnt[i,1])*math.sin(angle)
+        y=MA/2*math.cos(centered_cnt[i,1])*math.sin(angle)-ma/2*math.sin(centered_cnt[i,1])*math.cos(angle)
+        r=math.sqrt(x**2+y**2)
+        ed.append(np.abs(centered_cnt[i,0]-r)/r)
+
+
+    return np.average(ed)
 
 def getMinDiameter(contour):
     diam=99999
@@ -255,7 +274,7 @@ if __name__ == "__main__":
     minDiameter=100
     replicate=False
     resultText=[]
-    resultText.append("Radius, Major Axis, Minor Axis, Angle, Min Diameter")
+    resultText.append("Radius, Major Axis, Minor Axis, Angle, Min Diameter, Edge Deviation")
     try:
         os.makedirs(out_dir)
     except OSError as exception:
@@ -272,7 +291,7 @@ if __name__ == "__main__":
             cropY=img.shape[1]//25
             img=img[cropX:-cropX,cropY:-cropY]
 
-            binaryImage=processImage(img,40,3)
+            binaryImage=processImage(img,70,7)
             vias=findVias(binaryImage)
             outputImg,circles=circleFit(img,vias)
             cv2.imwrite(path.join(out_dir,filename),outputImg)
@@ -298,3 +317,4 @@ if __name__ == "__main__":
 #https://www.pyimagesearch.com/2014/04/21/building-pokedex-python-finding-game-boy-screen-step-4-6/
 #https://www.programcreek.com/python/example/88831/skimage.measure.regionprops
 #https://docs.opencv.org/master/d9/d8b/tutorial_py_contours_hierarchy.html
+#https://math.stackexchange.com/questions/2645689/what-is-the-parametric-equation-of-a-rotated-ellipse-given-the-angle-of-rotatio
