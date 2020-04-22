@@ -19,7 +19,7 @@ import fitellipse_RANSAC_edit
 
 
 
-def processImage(img,threshold,noiseReduction):
+def processImage(img,threshold,noiseReduction,method="d+s",debug=False):
     gain=20
     gray = cv2.equalizeHist(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
     gray = (cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
@@ -27,7 +27,7 @@ def processImage(img,threshold,noiseReduction):
     # Blur using 3 * 3 kernel. 
     gray_blurred =  gray#cv2.blur(gray, (5,5)) 
 
-    gray_blurred = cv2.bilateralFilter(gray, 7, 30, 175)
+    gray_blurred = cv2.bilateralFilter(gray, 3, 30, 175)
     gray_gaus =  cv2.blur(gray, (3,3)) 
 
 
@@ -60,7 +60,18 @@ def processImage(img,threshold,noiseReduction):
     laplace=cv2.Laplacian(gray_blurred,cv2.CV_64F)
 
 
-    iMapEdge=DoG+SobelEdge
+    if (method=="d+s"):
+        iMapEdge=DoG+SobelEdge
+    elif (method=="sobel"):
+        iMapEdge=SobelEdge
+    elif (method=="dog"):
+        iMapEdge=DoG
+    elif (method=="canny"):
+        iMapEdge=CannyEdge
+
+
+
+
     iMapEdge=np.divide(iMapEdge-np.min(iMapEdge),np.max(iMapEdge)-np.min(iMapEdge))*255
     iMapEdge=iMapEdge*gain
     iMapEdge[np.where(iMapEdge>255)]=255
@@ -72,14 +83,14 @@ def processImage(img,threshold,noiseReduction):
     kernel = np.ones((noiseReduction,noiseReduction),np.uint8)
 
     binaryImage=cv2.medianBlur(binaryImage.astype(np.uint8),9)
-    binaryImage=cv2.morphologyEx(binaryImage, cv2.MORPH_CLOSE, kernel)
+    binaryImage=cv2.morphologyEx(binaryImage.astype(np.uint8), cv2.MORPH_CLOSE, kernel)
     #print(binaryImage.dtype)
-
-    #cv2.namedWindow('Contours',cv2.WINDOW_NORMAL)
-    #cv2.resizeWindow('Contours', 800,600)
-    #cv2.imshow('Contours', binaryImage) 
-    #cv2.waitKey(0) 
-    #cv2.destroyAllWindows()
+    if(debug):
+        cv2.namedWindow('Contours',cv2.WINDOW_NORMAL)
+        cv2.resizeWindow('Contours', 800,600)
+        cv2.imshow('Contours', binaryImage) 
+        cv2.waitKey(0) 
+        cv2.destroyAllWindows()
 
     return binaryImage
 
@@ -159,7 +170,7 @@ def circleFit(outputImage,vias):
 
         edgeDeviation=calcED(best_ellipse,cnt)
 
-        resultText.append(str(r)+", "+str(MA)+", "+str(ma)+", "+str(angle)+ ", "+str(mD)+ ", "+str(edgeDeviation))
+        resultText.append(filename+", "+str(r)+", "+str(MA)+", "+str(ma)+", "+str(angle)+ ", "+str(mD)+ ", "+str(edgeDeviation))
     font = cv2.FONT_HERSHEY_SIMPLEX
     cv2.putText(outputImage, 'Major', (10,50), font, 2, (0, 255, 255), 2, cv2.LINE_AA)
     cv2.putText(outputImage, 'Minor', (10,100), font, 2, (0, 0, 255), 2, cv2.LINE_AA)
@@ -274,7 +285,7 @@ if __name__ == "__main__":
     minDiameter=100
     replicate=False
     resultText=[]
-    resultText.append("Radius, Major Axis, Minor Axis, Angle, Min Diameter, Edge Deviation")
+    resultText.append("Image,Radius, Major Axis, Minor Axis, Angle, Min Diameter, Edge Deviation")
     try:
         os.makedirs(out_dir)
     except OSError as exception:
@@ -290,8 +301,8 @@ if __name__ == "__main__":
             cropX=img.shape[0]//25
             cropY=img.shape[1]//25
             img=img[cropX:-cropX,cropY:-cropY]
-
-            binaryImage=processImage(img,70,7)
+            #available methods: "d+s"   "canny" "sobel" "dog"
+            binaryImage=processImage(img,70,7,method="d+s",debug=False)
             vias=findVias(binaryImage)
             outputImg,circles=circleFit(img,vias)
             cv2.imwrite(path.join(out_dir,filename),outputImg)
