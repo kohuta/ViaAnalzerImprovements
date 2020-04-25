@@ -20,7 +20,7 @@ import fitellipse_RANSAC_edit
 
 
 def processImage(img,threshold,noiseReduction,method="d+s",debug=False):
-    gain=20
+    gain=10
     gray = cv2.equalizeHist(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
     gray = (cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
 
@@ -58,39 +58,63 @@ def processImage(img,threshold,noiseReduction,method="d+s",debug=False):
     #LaPlacian
     #
     laplace=cv2.Laplacian(gray_blurred,cv2.CV_64F)
-
+    iMapEdge=SobelEdge
 
     if (method=="d+s"):
         iMapEdge=DoG+SobelEdge
+        iMapEdge=np.divide(iMapEdge-np.min(iMapEdge),np.max(iMapEdge)-np.min(iMapEdge))*255
+        iMapEdge=iMapEdge*gain
+        iMapEdge[np.where(iMapEdge>255)]=255
     elif (method=="sobel"):
         iMapEdge=SobelEdge
+        iMapEdge=np.divide(iMapEdge-np.min(iMapEdge),np.max(iMapEdge)-np.min(iMapEdge))*255
+        iMapEdge=iMapEdge*gain
+        iMapEdge[np.where(iMapEdge>255)]=255
     elif (method=="dog"):
         iMapEdge=DoG
+        iMapEdge=np.divide(iMapEdge-np.min(iMapEdge),np.max(iMapEdge)-np.min(iMapEdge))*255
+        iMapEdge=iMapEdge*gain
+        iMapEdge[np.where(iMapEdge>255)]=255
     elif (method=="canny"):
         iMapEdge=CannyEdge
+        iMapEdge=np.divide(iMapEdge-np.min(iMapEdge),np.max(iMapEdge)-np.min(iMapEdge))*255
+        iMapEdge=iMapEdge*gain
+        iMapEdge[np.where(iMapEdge>255)]=255
+    elif (method=="intensity"):
+        iMapEdge=gray
 
 
+    if(debug):
+        cv2.namedWindow('Contours',cv2.WINDOW_NORMAL)
+        cv2.resizeWindow('Contours', 800,600)
+        cv2.imshow('Contours', iMapEdge) 
+        cv2.waitKey(0) 
+        cv2.destroyAllWindows()
 
 
-    iMapEdge=np.divide(iMapEdge-np.min(iMapEdge),np.max(iMapEdge)-np.min(iMapEdge))*255
-    iMapEdge=iMapEdge*gain
-    iMapEdge[np.where(iMapEdge>255)]=255
 
 
 
     thresh,binaryImage  = cv2.threshold(iMapEdge,threshold,255,cv2.THRESH_BINARY_INV )
-    #binaryImage = cv2.adaptiveThreshold(iMapEdge.astype(np.uint8),255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,block_size,thresh3)
+
+    if (method=="adaptive"):
+        binaryImage = cv2.adaptiveThreshold(gray_blurred.astype(np.uint8),255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,79,2)
+
     kernel = np.ones((noiseReduction,noiseReduction),np.uint8)
 
-    binaryImage=cv2.medianBlur(binaryImage.astype(np.uint8),9)
+    binaryImage=cv2.medianBlur(binaryImage.astype(np.uint8),noiseReduction)
     binaryImage=cv2.morphologyEx(binaryImage.astype(np.uint8), cv2.MORPH_CLOSE, kernel)
     #print(binaryImage.dtype)
+
     if(debug):
         cv2.namedWindow('Contours',cv2.WINDOW_NORMAL)
         cv2.resizeWindow('Contours', 800,600)
         cv2.imshow('Contours', binaryImage) 
         cv2.waitKey(0) 
         cv2.destroyAllWindows()
+        
+
+
 
     return binaryImage
 
@@ -139,7 +163,7 @@ def findVias(binaryImage):
    
     return vias
 
-def circleFit(outputImage,vias):
+def circleFit(outputImage,vias,method):
     circles=[]
     for cnt in vias:
         xc,yc,r,car=circle_fit.hyper_fit((cnt[:,0,:]),1000)
@@ -148,11 +172,12 @@ def circleFit(outputImage,vias):
         circles.append((xc,yc,r,car))
         (x,y),(MA,ma),angle = cv2.fitEllipse(cnt)
 
-
-        best_ellipse,inlier_pnts=fitellipse_RANSAC_edit.FitVia_RANSAC2(cnt.reshape((cnt.shape[0],2)),input_pts=5,max_itts=10000, max_refines=1,max_perc_inliers=99.0)
+        if(method=="ransac"):
+            best_ellipse,inlier_pnts=fitellipse_RANSAC_edit.FitVia_RANSAC2(cnt.reshape((cnt.shape[0],2)),input_pts=5,max_itts=10000, max_refines=1,max_perc_inliers=99.0)
+        else: best_ellipse=cv2.fitEllipse(cnt)
         print(best_ellipse)
         cv2.ellipse(outputImage, (int(best_ellipse[0][0]),int(best_ellipse[0][1])), (int(best_ellipse[1][0]/2),int(best_ellipse[1][1]/2)),best_ellipse[2],0,359, (0, 0, 255), 2)
-        ((x,y),(MA,ma),angle)=best_ellipse
+        #((x,y),(MA,ma),angle)=best_ellipse
         mD, outx,outy, outang=getMinDiameter(cnt)
         mr=mD/2
         startpt=rotateLine((xc,yc), (xc-mr,yc), np.deg2rad(outang))#(xc-mr,yc)#(int(xc-mr/np.cos(outang)),int(yc-mr/np.cos(outang)))
@@ -277,12 +302,12 @@ def rotateLine(origin, point, angle):
 # You will need to modify the alpha value in order to achieve good results.
 if __name__ == "__main__":
 
-    directory = r'C:\Users\kohuta\Documents\Edge Detection Improvements\images\OM\Top'#DNP\H1-BACK\BACK_55'
+    directory = r'C:\Users\kohuta\Documents\Edge Detection Improvements\images\Micah'#DNP\H1-BACK\BACK_55'
     OUT_FOLDER = '\output'
     out_dir=directory+OUT_FOLDER
     print(out_dir)
-    maxDiameter=500
-    minDiameter=100
+    maxDiameter=80
+    minDiameter=50
     replicate=False
     resultText=[]
     resultText.append("Image,Radius, Major Axis, Minor Axis, Angle, Min Diameter, Edge Deviation")
@@ -293,7 +318,7 @@ if __name__ == "__main__":
             raise
 
     for filename in os.listdir(directory):
-        if filename.endswith(".bmp") or filename.endswith(".jpg"):
+        if filename.endswith(".bmp") or filename.endswith(".jpg") or filename.endswith(".png"):
             # Read image. 
             img = cv2.imread(os.path.join(directory, filename), cv2.IMREAD_COLOR) 
             debug = False
@@ -301,10 +326,10 @@ if __name__ == "__main__":
             cropX=img.shape[0]//25
             cropY=img.shape[1]//25
             img=img[cropX:-cropX,cropY:-cropY]
-            #available methods: "d+s"   "canny" "sobel" "dog"
-            binaryImage=processImage(img,70,7,method="d+s",debug=debug)
+            #available methods: "d+s"   "canny" "sobel" "dog" "intensity" "adaptive"
+            binaryImage=processImage(img,150,3,method="adaptive",debug=debug)
             vias=findVias(binaryImage)
-            outputImg,circles=circleFit(img,vias)
+            outputImg,circles=circleFit(img,vias,"ransac")
             cv2.imwrite(path.join(out_dir,filename),outputImg)
             print(path.join(out_dir,filename))#os.path.splitext(os.path.basename(filename))[0]+"_output.jpg"))
             if(debug):
