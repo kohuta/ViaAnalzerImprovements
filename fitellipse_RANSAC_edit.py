@@ -65,7 +65,7 @@ def FitVia_RANSAC2(pnts,input_pts=5, max_itts=5, max_refines=3, max_perc_inliers
 
     # Maximum normalize
     # d error squared for inliers
-    max_norm_err_sq = 5
+    max_norm_err_sq = 2
     norm_err_score=np.inf
 
     # Tiny circle init
@@ -83,7 +83,7 @@ def FitVia_RANSAC2(pnts,input_pts=5, max_itts=5, max_refines=3, max_perc_inliers
 
     # Count pnts (n x 2)
     n_pnts = pnts.shape[0]
-    print('npnts: ',n_pnts)
+    #print('npnts: ',n_pnts)
 
     # Break if too few points to fit ellipse (RARE)
     if n_pnts < input_pts:
@@ -134,8 +134,15 @@ def FitVia_RANSAC2(pnts,input_pts=5, max_itts=5, max_refines=3, max_perc_inliers
             best_ellipse = ellipse
             bestInliers=inlier_pnts
             inlier_count=n_inliers
+            norm_err_score=np.average(np.abs(norm_err))
+        elif n_inliers==inlier_count:
+            if np.average(np.abs(norm_err))<norm_err_score:
+                best_ellipse = ellipse
+                bestInliers=inlier_pnts
+                inlier_count=n_inliers
+                norm_err_score=np.average(np.abs(norm_err))
 
-            print(perc_inliers)
+            #print(perc_inliers)
 
         #if perc_inliers > max_perc_inliers:
         #    if DEBUG: print('Break Max Perc Inliers')
@@ -175,7 +182,7 @@ def FitVia_RANSAC_Converge(pnts,input_pts=5, max_itts=5, max_refines=3, max_perc
 
     # Maximum normalize
     # d error squared for inliers
-    max_norm_err_sq = 3
+    max_norm_err_sq = 5
     norm_err_score=np.inf
 
     # Tiny circle init
@@ -238,10 +245,12 @@ def FitVia_RANSAC_Converge(pnts,input_pts=5, max_itts=5, max_refines=3, max_perc
         #    cv2.waitKey(5)
 
         # Update best ellipse
-        if n_inliers>inlier_count:
+        #if n_inliers>inlier_count:
+        if np.average(norm_err)<norm_err_score:
             best_ellipse = ellipse
             bestInliers=inlier_pnts
             inlier_count=n_inliers
+            norm_err_score=np.average(norm_err)
 
             print(perc_inliers)
 
