@@ -9,8 +9,12 @@ import circle_fit
 import csv
 from os import path
 import errno
-from scipy.interpolate import splprep, splev
+from scipy import interpolate
+from scipy import signal
 
+
+from scipy.interpolate import splprep, splev
+from scipy.fftpack import fft, fftfreq
 
 
 from skimage.draw import ellipse
@@ -19,6 +23,7 @@ from skimage.transform import rotate
 
 import fitellipse_RANSAC_edit
 
+import numpy.polynomial.polynomial as poly
 
 
 
@@ -178,7 +183,7 @@ def circleFit(outputImage,vias,method):
         #(x,y),(MA,ma),angle = cv2.fitEllipse(cnt)
 
         if(method=="ransac"):
-            print("ransac fit")
+            #print("ransac fit")
             best_ellipse,inlier_pnts=fitellipse_RANSAC_edit.FitVia_RANSAC2(cnt.reshape((cnt.shape[0],2)),input_pts=5,max_itts=3000, max_refines=1,max_perc_inliers=99.0)
         else: best_ellipse=cv2.fitEllipse(cnt)
         #print(best_ellipse)
@@ -193,10 +198,11 @@ def circleFit(outputImage,vias,method):
         mastartpt=rotateLine((x,y), (x-ma/2,y), math.radians(angle))
         maendpt=rotateLine((x,y), (x+ma/2,y),math.radians(angle))
 
-        edgeDeviation=calcED(best_ellipse,cnt)
+        edgeDeviation, slopes, fft,psd=calcED(best_ellipse,cnt)
         inlier_percent=len(inlier_pnts)/len(cnt)#.shape(0)
-        print(inlier_percent)
+        #print(inlier_percent)
         r=np.average(np.array([ma,MA]))
+
         cv2.putText(outputImage, str(100*np.average(edgeDeviation))[:5], (int(endpt[0]),int(endpt[1])), font, 1, (226, 173, 93), 2, cv2.LINE_AA)
 
 
@@ -207,7 +213,7 @@ def circleFit(outputImage,vias,method):
         
 
 
-        resultText.append(filename+", "+str(x*pixelSize)+", "+str(y*pixelSize)+", "+str(r*pixelSize)+", "+str(ma*pixelSize)+", "+str(MA*pixelSize)+", "+str(angle)+ ", "+str(mD*pixelSize)+ ", "+str(ma/MA)+ ", "+str(mD/MA)+ ", "+str(np.average(edgeDeviation))+", "+str(np.median(edgeDeviation))+", "+str(np.amax(edgeDeviation))+", "+str(np.sum(edgeDeviation))+", "+str(np.std(edgeDeviation))+ ", "+str(inlier_percent))
+        resultText.append(filename+", "+str(x*pixelSize)+", "+str(y*pixelSize)+", "+str(r*pixelSize)+", "+str(ma*pixelSize)+", "+str(MA*pixelSize)+", "+str(angle)+ ", "+str(mD*pixelSize)+ ", "+str(ma/MA)+ ", "+str(mD/MA)+ ", "+str(np.average(edgeDeviation))+", "+str(np.median(edgeDeviation))+", "+str(np.amax(edgeDeviation))+", "+str(np.sum(edgeDeviation))+", "+str(np.std(edgeDeviation))+ ", "+str(inlier_percent)+ ", "+str(slopes)+ ", "+str(fft)+ ", "+str(psd))
     cv2.putText(outputImage, 'Major', (10,50), font, 2, (0, 255, 255), 2, cv2.LINE_AA)
     cv2.putText(outputImage, 'Minor', (10,100), font, 2, (0, 0, 255), 2, cv2.LINE_AA)
     cv2.putText(outputImage, 'Min', (10,150), font, 2, (255, 0,0), 2, cv2.LINE_AA)
@@ -226,44 +232,31 @@ def calcED(best_ellipse,cnt):
 
     ed=[]
     ed.clear()
-    # calculate moments of binary image
-
-    #M = cv2.moments(cnt)
-
-# calculate x,y coordinate of center
-
-    #cx = int(M["m10"] / M["m00"])
-
-    #cy = int(M["m01"] / M["m00"])
-    #centered_cnt=cnt.reshape((cnt.shape[0],2))
-    #centered_cnt[:,0]=centered_cnt[:,0]-cX
-    #centered_cnt[:,1]=centered_cnt[:,1]-cY
+    dos=[]
+    dos.clear()
+    edge_perc_error=[]
+    edge_perc_error.clear()
     centered_cnt = cnt - [x, y]
+    centered_cnt=rotate_centered_contour(centered_cnt,(90-math.degrees(angle)))
+    
+    #sm_centered_cnt= np.asarray(smoothContours([centered_cnt]))
+    #sm_centered_cnt= sm_centered_cnt.reshape((cnt.shape[0],2))
 
-    centered_cnt=rotate_centered_contour(centered_cnt,(90-math.degrees(angle))).reshape((cnt.shape[0],2))
-    #centered_cnt=centered_cnt.reshape((centered_cnt.shape[0],2))
-    #RAH_cnt=cart2pol(centered_cnt[:,0],centered_cnt[:,1])
-    #print("RAH ",RAH_cnt)j
+    centered_cnt=centered_cnt.reshape((cnt.shape[0],2))
 
-    #testimg=np.zeros((1400,1800,3), np.uint8)
-    # cv2.ellipse(testimg, (int(best_ellipse[0][0]),int(best_ellipse[0][1])), (int(best_ellipse[1][0]/2),int(best_ellipse[1][1]/2)),best_ellipse[2],0,359, (0, 0, 255), 1)
-    # #cv2.drawContours(testimg, [cnt], 0, (0, 255, 0), 1) 
-    #cv2.ellipse(testimg, (int(500),int(500)), (int(best_ellipse[1][0]/2),int(best_ellipse[1][1]/2)),best_ellipse[2],0,359, (0, 0, 255), 1)
-    #cv2.drawContours(testimg, [centered_cnt], 0, (0, 255, 0), 1) 
-    #((x,y),(ma,MA),angle)=cv2.fitEllipse(centered_cnt)
+    RAH_cnt=cart2pol(centered_cnt[:,0],centered_cnt[:,1])
 
     a=MA/2
     b=ma/2
+    edge_perc_error=[]
     
     for i in range(centered_cnt.shape[0]):
         theta_temp = np.arctan2(centered_cnt[i,1],centered_cnt[i,0])
         r_temp = np.hypot(centered_cnt[i,0],centered_cnt[i,1])
+        #r_sm = np.hypot(sm_centered_cnt[i,0],sm_centered_cnt[i,1])
+        #dos.append(np.abs(np.abs(r_temp)-np.abs(r_sm)))
 
         
-        #print("orig", theta_temp)
-
-        #xR=np.multiply(np.divide(MA,2),math.cos(theta_temp))
-        #yR=np.multiply(np.divide(ma,2),math.sin(theta_temp))
         if(np.abs(theta_temp)<=math.pi/2):
             xR=(a*b)/math.sqrt(b**2+np.tan(theta_temp)**2*a**2)
             yR=(a*b*np.tan(theta_temp))/math.sqrt(b**2+np.tan(theta_temp)**2*a**2)
@@ -273,49 +266,102 @@ def calcED(best_ellipse,cnt):
 
         r=np.hypot(xR,yR)
         theta = np.arctan2(yR, xR)
-        ellipse_pnts.append((theta, r))
-        #print("th", theta)
-        #print(type(r),type(r_temp))
+        ellipse_pnts.append((theta, r_temp))
+        edge_perc_error.append((theta,(r_temp-r)/r))
         ed.append(np.abs(np.abs(r_temp)-np.abs(r))/np.abs(r))
-        #testimg[int(centered_cnt[i,1]+500),int(centered_cnt[i,0])+500]=(255,255,255)
-        #testimg[int(yR+500),int(xR+500)]=(255,0,255)
+    
+    
+    edge_perc_error.sort()
+    ellipse_pnts.sort()
+    ellipse_theta=[seq[0] for seq in edge_perc_error]
+    ellipse_r=[ seq[1] for seq in edge_perc_error]
+    ellipse_rho=[ seq[1] for seq in ellipse_pnts]
+
+    #plt.scatter(RAH_cnt[0],RAH_cnt[1])
+    #plt.plot(ellipse_theta,ellipse_r, 'k-', color = 'r')
+    #plt.show()
+
+    #plt.scatter(centered_cnt[:,0],centered_cnt[:,1], s=1)
+    #matplotlib.patches.Ellipse((0,0),ma,MA,angle=angle)
+    plt.show()
+    #ellipse_rho=np.array(ellipse_rho)
+    #edge_r=np.array(ellipse_r)#RAH_cnt[1]-ellipse_r
+    plt.ylabel("Error (%)")
+    plt.xlabel("Angle (radians)")
+    plt.title("Edge Deviation vs Angle")
+    plt.grid()
+
+    uniform_x=np.linspace(np.min(ellipse_theta), np.amax(ellipse_theta), 180)
+    #spline = interpolate.splrep(ellipse_theta, ellipse_r, s=0.02)
+    #spline_data=interpolate.splev(uniform_x, spline)
+    f = interpolate.interp1d(ellipse_theta, ellipse_r, assume_sorted=False)
+    spline_data=f(uniform_x)
+    #f_rho = interpolate.interp1d(ellipse_theta, ellipse_rho, assume_sorted=False)
+    #spline_data_rho=f_rho(uniform_x)
+    #spline_x = spline_data_rho * np.cos(uniform_x+np.pi)
+    #spline_y = spline_data_rho * np.sin(uniform_x+np.pi)
+    #print(spline_data)
+
+    plt.scatter(ellipse_theta,ellipse_r,label='Edge Devation Data')
+    plt.plot(uniform_x,spline_data, color = 'r',label='Spline Fit')
+    plt.legend()
+    plt.show()
+
+    #dy = np.zeros(spline_data.shape,np.float)
+    dy= np.diff(spline_data)/np.diff(uniform_x)
+    #dy[-1] = (smoothed_data[-1] - smoothed_data[-2])/(ellipse_theta[-1] - ellipse_theta[-2])
+    plt.plot(uniform_x[1:],dy,'k-', color = 'r')
+    plt.title("Edge Deviation Derivative")
+
+    plt.ylabel("Error Derivative")
+    plt.xlabel("Angle (radians)")
+    
+    plt.grid()
+    plt.show()
+    dy[dy == -np.inf] = 0
+    dy[dy == np.inf] = 0
+    dy[dy == np.nan] = 0
+
+    slopes=np.nanmean(np.abs(dy))
+    cumulative_Error=np.sum(ellipse_r)
+    print("slopes ",slopes)
+#fft stuff
+
+    f_s =0.5 #cycles per sample
+    X = fft(spline_data)
+    freqs = fftfreq(len(spline_data)) * f_s
+
+    fig, ax = plt.subplots()
+
+    ax.stem(freqs, np.abs(X))
+    plt.title("FFT")
+    ax.set_xlabel('Frequency [1/deg]')
+    ax.set_ylabel('Frequency Domain (Spectrum) Magnitude')
+    ax.set_xlim(0, f_s/2)
+    ax.set_ylim(0, 3)
+    plt.show()
+    freqs, psd = signal.welch(spline_data)
+
+    plt.figure(figsize=(5, 4))
+    plt.semilogx(freqs, psd)
+    plt.title('PSD: power spectral density')
+    plt.xlabel('Frequency')
+    plt.ylabel('Power')
+    plt.tight_layout()
+    plt.show()
+    bands=0
+
+    
+    #The PSD shows how the power of your signal is distributed over your frequencies(square magnitude of the power spectal density)
+    #the FFT shows the amplitude and phase of each harmonic component of your signal
+
+    return ed,slopes, np.average(np.abs(X)),np.average(psd)#np.abs(np.abs(first_cnt_elements)-np.abs(first_ellipse_elements ))/np.abs(first_ellipse_elements)
 
 
-        # cv2.namedWindow('Contours',cv2.WINDOW_NORMAL)
-        # cv2.resizeWindow('Contours', 900,700)
-        # cv2.imshow('Contours', testimg) 
-        # cv2.waitKey(0) 
+def runningMeanFast(x, N):
+    return np.convolve(x, np.ones((N,))/N)[(N-1):]
 
 
-
-
-    #print(ed)
-    #ed=np.abs(np.abs(cnt_pnts[1][:])-np.abs(first_ellipse_elements ))/np.abs(first_ellipse_elements)
-    return ed#np.abs(np.abs(first_cnt_elements)-np.abs(first_ellipse_elements ))/np.abs(first_ellipse_elements)
-
-
-
-
-def NewcalcED(best_ellipse,cnt):
-    ((x,y),(ma,MA),angle)=best_ellipse
-
-
-
-    ed=[]
-    ed.clear()
- 
-    centered_cnt=cnt.reshape((cnt.shape[0],2))
-    centered_cnt[:,0]=centered_cnt[:,0]-x
-    centered_cnt[:,1]=centered_cnt[:,1]-y
-
-
-    for i in range(centered_cnt.shape[0]):
-
-
-        err=fitellipse_RANSAC_edit.EllipseEDError(cnt.reshape((cnt.shape[0],2)), best_ellipse)
-        ed.append(1)
-
-    return err
 
 def getMinDiameter(contour):
     diam=99999
@@ -327,13 +373,7 @@ def getMinDiameter(contour):
     while angle < 359:
         cnt=rotate_contour(contour, angle)
         x,y,w,h = cv2.boundingRect(cnt)
-        #w=np.amax(cnt[np.where])
-        #image=np.zeros((4000,4000))
-        #cv2.drawContours(image,[cnt],-1,(255,0,0),5)
-        #cv2.namedWindow('Contours',cv2.WINDOW_NORMAL)
-        #cv2.resizeWindow('Contours', 800,600)
-        #cv2.imshow('Contours', image) 
-        #cv2.waitKey(0) 
+ 
         if(w<diam):
             diam=w
             outx=x
@@ -412,12 +452,24 @@ def smoothContours(contours):
     for contour in contours:
         x,y = contour.T
         # Convert from numpy arrays to normal arrays
-        x = x.tolist()[0]
-        y = y.tolist()[0]
+        xp = np.array(x.tolist()[0])
+        yp = np.array(y.tolist()[0])
+        #okay = np.where(np.abs(np.diff(xp)) + np.abs(np.diff(yp)) > 0)
+        #xp = np.r_[xp[okay], xp[-1], xp[0]]
+        #yp = np.r_[yp[okay], yp[-1], yp[0]]
+
+
+        jump = np.sqrt(np.diff(xp)**2 + np.diff(yp)**2).astype(int) 
+        smooth_jump = scipy.ndimage.gaussian_filter1d(jump, 5, mode='wrap').astype(int)   # window of size 5 is arbitrary
+        limit = 2*np.median(smooth_jump).astype(int)     # factor 2 is arbitrary
+        xn, yn = xp[:-1], yp[:-1]
+        xn = xn[(jump > 0) & (smooth_jump < limit)]
+        yn = yn[(jump > 0) & (smooth_jump < limit)]
+
         # https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.interpolate.splprep.html
-        tck, u = splprep([x,y], u=None, s=1.0, per=1)
+        tck, u = splprep([xn,yn], u=None, s=1.0, per=1)
         # https://docs.scipy.org/doc/numpy-1.10.1/reference/generated/numpy.linspace.html
-        u_new = np.linspace(u.min(), u.max(), 25)
+        u_new = np.linspace(u.min(), u.max(), len(xp))
         # https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.interpolate.splev.html
         x_new, y_new = splev(u_new, tck, der=0)
         # Convert it back to numpy format for opencv to be able to display it
@@ -448,12 +500,12 @@ if __name__ == "__main__":
     OUT_FOLDER = '\output'
     out_dir=directory+OUT_FOLDER
     print(out_dir)
-    pixelSize=0.3235#0.112#0.3235#
-    maxDiameter=65
-    minDiameter=45
+    pixelSize=0.3235#0.252#0.3235#0.112#0.3235#
+    maxDiameter=190
+    minDiameter=40
     replicate=False
     resultText=[]
-    resultText.append("Image, Xloc, Yloc, Radius, Minor Axis, Major Axis, Angle, Min Diameter, Roundess, Circularity, Edge Deviation Mean, Edge Deviation Median, Edge Deviation Max, Edge Deviation Sum,  Edge Deviation Std, Inlier%")
+    resultText.append("Image, Xloc, Yloc, Radius, Minor Axis, Major Axis, Angle, Min Diameter, Roundess, Circularity, Edge Deviation Mean, Edge Deviation Median, Edge Deviation Max, Edge Deviation Sum,  Edge Deviation Std, Inlier%, slopes, fft, psd")
     try:
         os.makedirs(out_dir)
     except OSError as exception:
@@ -510,3 +562,4 @@ if __name__ == "__main__":
 #https://math.stackexchange.com/questions/2645689/what-is-the-parametric-equation-of-a-rotated-ellipse-given-the-angle-of-rotatio
 #https://math.stackexchange.com/questions/22064/calculating-a-point-that-lies-on-an-ellipse-given-an-angle
 #https://agniva.me/scipy/2016/10/25/contour-smoothing.html
+#https://stackoverflow.com/questions/47948453/scipy-interpolate-splprep-error-invalid-inputs

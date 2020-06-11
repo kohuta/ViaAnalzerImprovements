@@ -65,7 +65,7 @@ def FitVia_RANSAC2(pnts,input_pts=5, max_itts=5, max_refines=3, max_perc_inliers
 
     # Maximum normalize
     # d error squared for inliers
-    max_norm_err_sq = 2
+    max_norm_err_sq = 3
     norm_err_score=np.inf
 
     # Tiny circle init
