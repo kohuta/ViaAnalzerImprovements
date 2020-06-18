@@ -69,7 +69,8 @@ def FitVia_RANSAC2(pnts,input_pts=5, max_itts=5, max_refines=3, max_perc_inliers
     norm_err_score=np.inf
 
     # Tiny circle init
-    best_ellipse = ((0,0),(1e-6,1e-6),0)
+    best_ellipse = cv2.fitEllipse(pnts)
+    ((x,y),(MA_,ma),angle)=best_ellipse
     bestInliers =np.zeros((5,2))
     inlier_count=0
     inliers =[]
@@ -101,6 +102,8 @@ def FitVia_RANSAC2(pnts,input_pts=5, max_itts=5, max_refines=3, max_perc_inliers
         ellipse = cv2.fitEllipse(sample_pnts)
         ((x,y),(MA,ma),angle)=ellipse
         if(MA==0):
+            continue
+        if(np.abs(MA-MA_)>50):
             continue
         
             # Calculate normalized errors for all points

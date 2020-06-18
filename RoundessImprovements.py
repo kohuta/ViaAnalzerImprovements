@@ -283,13 +283,14 @@ def calcED(best_ellipse,cnt):
 
     #plt.scatter(centered_cnt[:,0],centered_cnt[:,1], s=1)
     #matplotlib.patches.Ellipse((0,0),ma,MA,angle=angle)
-    plt.show()
+    #plt.show()
     #ellipse_rho=np.array(ellipse_rho)
     #edge_r=np.array(ellipse_r)#RAH_cnt[1]-ellipse_r
-    plt.ylabel("Error (%)")
-    plt.xlabel("Angle (radians)")
-    plt.title("Edge Deviation vs Angle")
-    plt.grid()
+    if(debug):
+        plt.ylabel("Error (%)")
+        plt.xlabel("Angle (radians)")
+        plt.title("Edge Deviation vs Angle")
+        plt.grid()
 
     uniform_x=np.linspace(np.min(ellipse_theta), np.amax(ellipse_theta), 180)
     #spline = interpolate.splrep(ellipse_theta, ellipse_r, s=0.02)
@@ -301,23 +302,24 @@ def calcED(best_ellipse,cnt):
     #spline_x = spline_data_rho * np.cos(uniform_x+np.pi)
     #spline_y = spline_data_rho * np.sin(uniform_x+np.pi)
     #print(spline_data)
-
-    plt.scatter(ellipse_theta,ellipse_r,label='Edge Devation Data')
-    plt.plot(uniform_x,spline_data, color = 'r',label='Spline Fit')
-    plt.legend()
-    plt.show()
+    if(debug):
+        plt.scatter(ellipse_theta,ellipse_r,label='Edge Devation Data')
+        plt.plot(uniform_x,spline_data, color = 'r',label='Spline Fit')
+        plt.legend()
+        plt.show()
 
     #dy = np.zeros(spline_data.shape,np.float)
     dy= np.diff(spline_data)/np.diff(uniform_x)
     #dy[-1] = (smoothed_data[-1] - smoothed_data[-2])/(ellipse_theta[-1] - ellipse_theta[-2])
-    plt.plot(uniform_x[1:],dy,'k-', color = 'r')
-    plt.title("Edge Deviation Derivative")
+    if(debug):
+        plt.plot(uniform_x[1:],dy,'k-', color = 'r')
+        plt.title("Edge Deviation Derivative")
 
-    plt.ylabel("Error Derivative")
-    plt.xlabel("Angle (radians)")
-    
-    plt.grid()
-    plt.show()
+        plt.ylabel("Error Derivative")
+        plt.xlabel("Angle (radians)")
+        
+        plt.grid()
+        plt.show()
     dy[dy == -np.inf] = 0
     dy[dy == np.inf] = 0
     dy[dy == np.nan] = 0
@@ -330,25 +332,27 @@ def calcED(best_ellipse,cnt):
     f_s =0.5 #cycles per sample
     X = fft(spline_data)
     freqs = fftfreq(len(spline_data)) * f_s
+    if(debug):
 
-    fig, ax = plt.subplots()
+        fig, ax = plt.subplots()
 
-    ax.stem(freqs, np.abs(X))
-    plt.title("FFT")
-    ax.set_xlabel('Frequency [1/deg]')
-    ax.set_ylabel('Frequency Domain (Spectrum) Magnitude')
-    ax.set_xlim(0, f_s/2)
-    ax.set_ylim(0, 3)
-    plt.show()
+        ax.stem(freqs, np.abs(X))
+        plt.title("FFT")
+        ax.set_xlabel('Frequency [1/deg]')
+        ax.set_ylabel('Frequency Domain (Spectrum) Magnitude')
+        ax.set_xlim(0, f_s/2)
+        ax.set_ylim(0, 3)
+        plt.show()
     freqs, psd = signal.welch(spline_data)
+    if(debug):
 
-    plt.figure(figsize=(5, 4))
-    plt.semilogx(freqs, psd)
-    plt.title('PSD: power spectral density')
-    plt.xlabel('Frequency')
-    plt.ylabel('Power')
-    plt.tight_layout()
-    plt.show()
+        plt.figure(figsize=(5, 4))
+        plt.semilogx(freqs, psd)
+        plt.title('PSD: power spectral density')
+        plt.xlabel('Frequency')
+        plt.ylabel('Power')
+        plt.tight_layout()
+        plt.show()
     bands=0
 
     
@@ -496,13 +500,13 @@ def rotateLine(origin, point, angle):
 # You will need to modify the alpha value in order to achieve good results.
 if __name__ == "__main__":
 
-    directory = r'C:\Users\kohuta\Documents\Edge Detection Improvements\images\DNP\Seperated\55\H0\fail'#DNP\78 - Artificial'#\DNP\Seperated\55\H0\fail'
+    directory = r'C:\Users\kohuta\Documents\Edge Detection Improvements\images\micah_images'#C:\Users\kohuta\Documents\Edge Detection Improvements\images\DNP\Seperated\55\H0\fail'#DNP\78 - Artificial'#\DNP\Seperated\55\H0\fail'
     OUT_FOLDER = '\output'
     out_dir=directory+OUT_FOLDER
     print(out_dir)
     pixelSize=0.3235#0.252#0.3235#0.112#0.3235#
     maxDiameter=190
-    minDiameter=40
+    minDiameter=20
     replicate=False
     resultText=[]
     resultText.append("Image, Xloc, Yloc, Radius, Minor Axis, Major Axis, Angle, Min Diameter, Roundess, Circularity, Edge Deviation Mean, Edge Deviation Median, Edge Deviation Max, Edge Deviation Sum,  Edge Deviation Std, Inlier%, slopes, fft, psd")
@@ -522,7 +526,7 @@ if __name__ == "__main__":
             #cropY=img.shape[1]//25
             #img=img[cropX:-cropX,cropY:-cropY]
             #available methods: "d+s"   "canny" "sobel" "dog" "intensity" "adaptive"
-            binaryImage=processImage(img,70,15,method="sobel",debug=debug)
+            binaryImage=processImage(img,90,5,method="sobel",debug=False)
             vias=findVias(binaryImage)
             smoothVias = vias#smoothContours(vias)
             outputImg,circles=circleFit(img,smoothVias,"ransac")
